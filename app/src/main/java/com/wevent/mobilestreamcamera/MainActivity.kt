@@ -60,7 +60,7 @@ class MainActivity : AppCompatActivity(), ConnectChecker {
             setPadding(dp(14), dp(10), dp(14), dp(22))
             setBackgroundColor(navy)
         }
-        scroll.addView(root, ScrollView.LayoutParams(-1, -2))
+        scroll.addView(root, LinearLayout.LayoutParams(-1, -2))
 
         root.addView(TextView(this).apply {
             text = "MOBILE STREAM CAMERA"
