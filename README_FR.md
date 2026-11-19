@@ -31,3 +31,13 @@ https://github.com/pedroSG94/RootEncoder
 3. Ajouter gestion audio AAC et enregistrement MP4.
 4. Implémenter le double streaming avec un encodeur unique et une sortie multi-destination, ou mesurer les limites d'une double session.
 5. Tester sur Infinix X1101B Android 14, puis optimiser chauffe, batterie et stabilité.
+
+## Générer un APK avec GitHub Actions
+
+1. Envoyer tous les fichiers du projet à la racine du dépôt GitHub `MobileStreamCamera`.
+2. Ouvrir l'onglet **Actions**.
+3. Choisir **Build Mobile Stream Camera V1**.
+4. Cliquer sur **Run workflow**.
+5. Une fois le job terminé avec succès, télécharger l'Artifact `MobileStreamCamera-V1-debug`.
+
+Cette compilation génère un APK de prototype. Elle ne transforme pas encore l'écran de configuration en caméra de streaming fonctionnelle.
