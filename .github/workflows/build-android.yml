@@ -1,43 +1,29 @@
-name: Build Mobile Stream Camera V1.1
-
+name: Build Mobile Stream Camera V1.2
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
-
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
-
       - name: Verify APK
-        run: |
-          test -f app/build/outputs/apk/debug/app-debug.apk
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+        run: test -f app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
         with:
-          name: MobileStreamCamera-V1.1-debug
+          name: MobileStreamCamera-V1.2-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
