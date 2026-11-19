@@ -4,137 +4,160 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.Gravity
-import android.widget.*
+import android.view.View
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
     private val navy = 0xFF101A35.toInt()
     private val gold = 0xFFC8A45D.toInt()
+    private lateinit var previewView: PreviewView
     private lateinit var status: TextView
-    private lateinit var resolution: Spinner
-    private lateinit var fps: Spinner
-    private lateinit var bitrate: SeekBar
-    private lateinit var bitrateLabel: TextView
-    private lateinit var protocol: Spinner
-    private lateinit var url: EditText
-    private lateinit var doubleStream: CheckBox
+    private lateinit var switchButton: Button
+    private var cameraProvider: ProcessCameraProvider? = null
+    private var useFrontCamera = false
+
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+            val cameraGranted = grants[Manifest.permission.CAMERA] == true
+            if (cameraGranted) startCamera()
+            else status.text = "AUTORISATION CAMÉRA REFUSÉE"
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        requestPermissionsIfNeeded()
         buildUi()
-    }
-
-    private fun requestPermissionsIfNeeded() {
-        val missing = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
-            .filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
-        if (missing.isNotEmpty()) ActivityCompat.requestPermissions(this, missing.toTypedArray(), 100)
+        ensureCameraPermission()
     }
 
     private fun buildUi() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(navy)
-            setPadding(20, 22, 20, 18)
+            setPadding(14, 12, 14, 12)
         }
-        val title = TextView(this).apply {
-            text = "MOBILE STREAM CAMERA"
-            textSize = 22f
-            setTextColor(gold)
-            gravity = Gravity.CENTER
-        }
-        root.addView(title, matchWrap())
-        val subtitle = TextView(this).apply {
-            text = "WEVENT • BROADCAST CAMERA V1"
-            textSize = 11f
-            setTextColor(0xFFCBD2E2.toInt())
-            gravity = Gravity.CENTER
-        }
-        root.addView(subtitle, matchWrap())
 
-        val preview = FrameLayout(this).apply {
-            setBackgroundColor(0xFF080D19.toInt())
-        }
-        val previewText = TextView(this).apply {
-            text = "APERÇU CAMÉRA\n\nLa prévisualisation caméra sera activée dans le module Camera2."
+        val header = TextView(this).apply {
+            text = "MOBILE STREAM CAMERA  •  V1.1"
+            textSize = 20f
             gravity = Gravity.CENTER
-            textSize = 15f
-            setTextColor(0xFFFFFFFF.toInt())
+            setTextColor(gold)
+            setPadding(4, 4, 4, 10)
         }
-        preview.addView(previewText, FrameLayout.LayoutParams(-1, -1))
-        val previewParams = LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = 18; bottomMargin = 12 }
-        root.addView(preview, previewParams)
+        root.addView(header, LinearLayout.LayoutParams(-1, -2))
+
+        previewView = PreviewView(this).apply {
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+        }
+        root.addView(previewView, LinearLayout.LayoutParams(-1, 0, 1f))
 
         status = TextView(this).apply {
-            text = "● PRÊT — configuration non démarrée"
-            setTextColor(gold)
+            text = "INITIALISATION CAMÉRA…"
             textSize = 13f
-        }
-        root.addView(status, matchWrap())
-
-        resolution = spinner(listOf("1920 × 1080", "1280 × 720", "854 × 480", "3840 × 2160 (si supporté)"))
-        addField(root, "RÉSOLUTION", resolution)
-        fps = spinner(listOf("25 FPS", "30 FPS", "50 FPS", "60 FPS"))
-        addField(root, "FRÉQUENCE", fps)
-
-        bitrateLabel = TextView(this).apply { setTextColor(-1); text = "BITRATE VIDÉO : 6 000 kbps" }
-        root.addView(bitrateLabel, matchWrap())
-        bitrate = SeekBar(this).apply {
-            max = 195
-            progress = 55
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, user: Boolean) {
-                    bitrateLabel.text = "BITRATE VIDÉO : ${(p * 100 + 500)} kbps"
-                }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        }
-        root.addView(bitrate, matchWrap())
-
-        protocol = spinner(listOf("RTMP", "SRT"))
-        addField(root, "PROTOCOLE PRINCIPAL", protocol)
-        url = EditText(this).apply {
-            setSingleLine(true)
             setTextColor(-1)
-            setHintTextColor(0xFF9AA5B8.toInt())
-            hint = "rtmp://serveur:1935/live/camera1"
-            setText("rtmp://192.168.0.7:1935/live/camera1")
+            gravity = Gravity.CENTER
+            setPadding(4, 8, 4, 8)
         }
-        root.addView(url, matchWrap())
-        doubleStream = CheckBox(this).apply {
-            text = "DOUBLE STREAMING (serveur V5 + destination externe)"
-            setTextColor(-1)
-            buttonTintList = android.content.res.ColorStateList.valueOf(gold)
-        }
-        root.addView(doubleStream, matchWrap())
+        root.addView(status, LinearLayout.LayoutParams(-1, -2))
 
-        val start = Button(this).apply {
-            text = "CONFIGURER LE STREAM"
-            setBackgroundColor(gold)
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        switchButton = Button(this).apply {
+            text = "BASCULER AVANT / ARRIÈRE"
             setTextColor(navy)
+            setBackgroundColor(gold)
             setOnClickListener {
-                status.text = "Configuration prête — moteur de streaming à connecter"
-                Toast.makeText(this@MainActivity,
-                    "V1 foundation: caméra/encodeur/transport à finaliser et tester.", Toast.LENGTH_LONG).show()
+                useFrontCamera = !useFrontCamera
+                startCamera()
             }
         }
-        root.addView(start, LinearLayout.LayoutParams(-1, 54).apply { topMargin = 10 })
-        val scroll = ScrollView(this).apply { addView(root) }
-        setContentView(scroll)
+        controls.addView(switchButton, LinearLayout.LayoutParams(0, 54, 1f))
+
+        val info = Button(this).apply {
+            text = "INFO CAMÉRA"
+            setOnClickListener { showCameraInfo() }
+        }
+        controls.addView(info, LinearLayout.LayoutParams(0, 54, 1f))
+        root.addView(controls, LinearLayout.LayoutParams(-1, -2))
+
+        val note = TextView(this).apply {
+            text = "V1.1 : aperçu caméra et basculement. Streaming RTMP/SRT en cours d'intégration."
+            textSize = 11f
+            setTextColor(0xFFB8C2D6.toInt())
+            gravity = Gravity.CENTER
+            setPadding(4, 8, 4, 2)
+        }
+        root.addView(note, LinearLayout.LayoutParams(-1, -2))
+        setContentView(root)
     }
 
-    private fun spinner(items: List<String>) = Spinner(this).apply {
-        adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, items)
+    private fun ensureCameraPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+            PackageManager.PERMISSION_GRANTED) {
+            startCamera()
+        } else {
+            permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
+        }
     }
 
-    private fun addField(root: LinearLayout, label: String, view: android.view.View) {
-        val text = TextView(this).apply { this.text = label; setTextColor(gold); textSize = 11f }
-        root.addView(text, matchWrap())
-        root.addView(view, matchWrap())
+    private fun startCamera() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) !=
+            PackageManager.PERMISSION_GRANTED) return
+
+        val future = ProcessCameraProvider.getInstance(this)
+        future.addListener({
+            try {
+                val provider = future.get()
+                cameraProvider = provider
+                val selector = if (useFrontCamera) CameraSelector.DEFAULT_FRONT_CAMERA
+                               else CameraSelector.DEFAULT_BACK_CAMERA
+
+                if (!provider.hasCamera(selector)) {
+                    useFrontCamera = !useFrontCamera
+                    status.text = "Caméra demandée indisponible — autre caméra sélectionnée"
+                    startCamera()
+                    return@addListener
+                }
+
+                val preview = Preview.Builder().build().also {
+                    it.setSurfaceProvider(previewView.surfaceProvider)
+                }
+
+                provider.unbindAll()
+                provider.bindToLifecycle(this, selector, preview)
+                status.text = if (useFrontCamera) "● CAMÉRA AVANT ACTIVE"
+                              else "● CAMÉRA ARRIÈRE ACTIVE"
+            } catch (e: Exception) {
+                status.text = "ERREUR CAMÉRA : ${e.localizedMessage ?: "inconnue"}"
+            }
+        }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun matchWrap() = LinearLayout.LayoutParams(-1, -2)
+    private fun showCameraInfo() {
+        val provider = cameraProvider
+        val text = if (provider == null) "Caméra non initialisée"
+        else {
+            val back = provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)
+            val front = provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)
+            "Arrière : ${if (back) "disponible" else "indisponible"}\nAvant : ${if (front) "disponible" else "indisponible"}"
+        }
+        Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+    }
+
+    override fun onDestroy() {
+        cameraProvider?.unbindAll()
+        super.onDestroy()
+    }
 }
